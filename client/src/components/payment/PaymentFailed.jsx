@@ -1,0 +1,3 @@
+import PaymentStatusCard from './PaymentStatusCard.jsx'
+import { formatAmount } from './PaymentProcessing.jsx'
+export default function PaymentFailed({ payment, order }) { return <PaymentStatusCard tone="danger" title="Payment wasn't completed" message="The payment provider reported this attempt as failed. No paid order was created."><dl className="details"><div><dt>Amount</dt><dd>{formatAmount(payment.amount, payment.currency)}</dd></div><div><dt>Payment status</dt><dd>{payment.status}</dd></div><div><dt>Order status</dt><dd>{order.status}</dd></div></dl><a className="button-link" href="/checkout">Try Again</a></PaymentStatusCard> }

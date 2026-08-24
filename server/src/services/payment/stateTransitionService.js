@@ -1,0 +1,29 @@
+import { ORDER_STATES, PAYMENT_STATES } from '../../utils/paymentStates.js'
+
+const paymentTransitions = {
+  [PAYMENT_STATES.CREATED]: [PAYMENT_STATES.PENDING, PAYMENT_STATES.FAILED, PAYMENT_STATES.UNKNOWN],
+  [PAYMENT_STATES.PENDING]: [PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.CAPTURED, PAYMENT_STATES.FAILED, PAYMENT_STATES.UNKNOWN],
+  [PAYMENT_STATES.AUTHORIZED]: [PAYMENT_STATES.CAPTURED, PAYMENT_STATES.FAILED, PAYMENT_STATES.UNKNOWN],
+  [PAYMENT_STATES.CAPTURED]: [PAYMENT_STATES.REFUNDED],
+  [PAYMENT_STATES.FAILED]: [],
+  [PAYMENT_STATES.UNKNOWN]: [PAYMENT_STATES.PENDING, PAYMENT_STATES.AUTHORIZED, PAYMENT_STATES.CAPTURED, PAYMENT_STATES.FAILED],
+  [PAYMENT_STATES.REFUNDED]: [],
+}
+
+const orderTransitions = {
+  [ORDER_STATES.PENDING_PAYMENT]: [ORDER_STATES.PAID, ORDER_STATES.PAYMENT_FAILED, ORDER_STATES.PAYMENT_REVIEW, ORDER_STATES.CANCELLED],
+  [ORDER_STATES.PAYMENT_FAILED]: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAYMENT_REVIEW, ORDER_STATES.CANCELLED],
+  [ORDER_STATES.PAYMENT_REVIEW]: [ORDER_STATES.PENDING_PAYMENT, ORDER_STATES.PAID, ORDER_STATES.PAYMENT_FAILED, ORDER_STATES.CANCELLED],
+  [ORDER_STATES.PAID]: [],
+  [ORDER_STATES.CANCELLED]: [],
+}
+
+function assertTransition(transitions, currentState, nextState, entity) {
+  if (!transitions[currentState]?.includes(nextState)) {
+    throw new Error(`Invalid ${entity} state transition: ${currentState} -> ${nextState}`)
+  }
+  return nextState
+}
+
+export const assertPaymentTransition = (current, next) => assertTransition(paymentTransitions, current, next, 'payment')
+export const assertOrderTransition = (current, next) => assertTransition(orderTransitions, current, next, 'order')

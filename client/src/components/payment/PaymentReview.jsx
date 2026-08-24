@@ -1,0 +1,5 @@
+import PaymentStatusCard from './PaymentStatusCard.jsx'
+import { formatAmount } from './PaymentProcessing.jsx'
+export default function PaymentReview({ payment, order, onCheck, loading, timedOut }) {
+  return <PaymentStatusCard tone="warning" title="Payment verification in progress" message="Your bank may have processed this payment."><p className="dont-pay">Please don't pay again.</p><dl className="details"><div><dt>Amount</dt><dd>{formatAmount(payment.amount, payment.currency)}</dd></div><div><dt>Status</dt><dd>{payment.status}</dd></div><div><dt>Payment ID</dt><dd>{payment.razorpayPaymentId || payment.id}</dd></div><div><dt>Order reference</dt><dd>{payment.razorpayOrderId || order.orderNumber}</dd></div><div><dt>Last updated</dt><dd>{new Date(payment.updatedAt).toLocaleString()}</dd></div></dl>{timedOut && <p className="muted">We're still verifying your payment. You don't need to pay again.</p>}<button type="button" onClick={onCheck} disabled={loading}>{loading ? 'Checking…' : 'Check payment status'}</button></PaymentStatusCard>
+}
