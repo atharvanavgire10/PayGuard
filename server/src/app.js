@@ -3,6 +3,7 @@ import express from 'express'
 import healthRouter from './routes/healthRoutes.js'
 import paymentStatusRouter from './routes/paymentStatusRoutes.js'
 import checkoutRouter from './routes/checkoutRoutes.js'
+import dashboardRouter from './routes/dashboardRoutes.js'
 import razorpayWebhookRouter from './routes/razorpayWebhookRoutes.js'
 import { errorHandler } from './middleware/errorHandler.js'
 
@@ -14,6 +15,7 @@ app.use(express.json())
 app.use('/api/health', healthRouter)
 app.use('/api', paymentStatusRouter)
 app.use('/api', checkoutRouter)
+app.use('/api', dashboardRouter)
 app.use(errorHandler)
 
 export default app

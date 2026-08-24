@@ -22,6 +22,35 @@ export async function verifyPayment(payload) {
   return data
 }
 
+export async function getDashboardSummary() {
+  const { data } = await api.get('/dashboard/summary')
+  return data
+}
+
+export async function getDashboardPayments(limit) {
+  const { data } = await api.get('/dashboard/payments', { params: limit ? { limit } : undefined })
+  return data
+}
+
+export async function getDashboardAttention(limit) {
+  const { data } = await api.get('/dashboard/attention', { params: limit ? { limit } : undefined })
+  return data
+}
+
+export async function getDashboardReconciliation(paymentId) {
+  const { data } = await api.get(`/dashboard/reconciliation/${encodeURIComponent(paymentId)}`)
+  return data
+}
+
+// The dashboard is development-only on the server, so a 404 means "not enabled here",
+// not "record missing". Kept separate so payment-facing messaging is unchanged.
+export function toSafeDashboardError(error) {
+  const status = error?.response?.status
+  if (status === 404) return 'The reliability dashboard is only available in development.'
+  if (error?.code === 'ECONNABORTED' || !error?.response) return 'We could not reach PayGuard. Dashboard data is unavailable right now.'
+  return 'Dashboard data is temporarily unavailable. Please try again shortly.'
+}
+
 export function toSafeApiError(error) {
   const status = error?.response?.status
   const serverMessage = error?.response?.data?.error?.message

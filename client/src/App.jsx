@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom'
 import './App.css'
 import CheckoutPage from './pages/CheckoutPage.jsx'
+import DashboardPage from './pages/DashboardPage.jsx'
 import PaymentStatusPage from './pages/PaymentStatusPage.jsx'
 
 function FoundationPage() {
@@ -20,6 +21,7 @@ function App() {
   return (
     <Routes>
       <Route path="/checkout" element={<CheckoutPage />} />
+      <Route path="/dashboard" element={<DashboardPage />} />
       <Route path="/payment/processing" element={<PaymentStatusPage />} />
       <Route path="/payment/review" element={<PaymentStatusPage />} />
       <Route path="/payment/success" element={<PaymentStatusPage />} />
