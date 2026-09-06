@@ -15,6 +15,10 @@ All are `GET`, all read-only, all behind the development guard.
 
 The UI lives at **`/dashboard`**.
 
+## Phase 15 automated repair (development only)
+
+`POST /api/reconciliation/run` runs the narrowly scoped reconciliation engine in development. It repairs only a stored `CAPTURED` payment whose associated order is not `PAID`, using the normal order state-transition service. `PENDING` and `UNKNOWN` payments are never promoted: they receive a deduplicated `MANUAL_REVIEW_REQUIRED` audit event instead. The runner records `RECONCILIATION_STARTED` and `ORDER_REPAIRED` only for an actual safe repair.
+
 ## What lands in the attention queue
 
 An entry appears only when the database actually says so:
