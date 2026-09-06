@@ -1,4 +1,6 @@
 import { runAutomatedReconciliation } from './automatedReconciliationService.js'
+import { randomUUID } from 'node:crypto'
+import { acquireReconciliationLock, releaseReconciliationLock } from './reconciliationLockService.js'
 
 export const DEFAULT_RECONCILIATION_INTERVAL_MS = 5 * 60 * 1000
 const MINIMUM_RECONCILIATION_INTERVAL_MS = 1000
@@ -12,20 +14,30 @@ export function getReconciliationIntervalMs(value = process.env.RECONCILIATION_I
 
 // This in-process worker deliberately owns no repair rules. A production queue can replace it
 // later while continuing to call the same authoritative reconciliation service.
-export function createReconciliationWorker({ run = runAutomatedReconciliation, intervalMs = getReconciliationIntervalMs(), setIntervalFn = setInterval, clearIntervalFn = clearInterval } = {}) {
+export function createReconciliationWorker({ run = runAutomatedReconciliation, intervalMs = getReconciliationIntervalMs(), setIntervalFn = setInterval, clearIntervalFn = clearInterval, ownerId = randomUUID(), lock } = {}) {
   let timer = null
   let running = false
+  const distributedLock = lock || {
+    acquire: () => acquireReconciliationLock({ ownerId }),
+    release: () => releaseReconciliationLock({ ownerId }),
+  }
 
   async function runOnce() {
     if (running) return { skipped: true }
     running = true
+    let acquired = false
     try {
+      acquired = await distributedLock.acquire()
+      if (!acquired) return { skipped: true }
       await run()
       return { skipped: false }
     } catch (error) {
       console.error('Scheduled reconciliation failed.')
       return { skipped: false, failed: true }
     } finally {
+      if (acquired) {
+        try { await distributedLock.release() } catch { console.error('Scheduled reconciliation lock release failed.') }
+      }
       running = false
     }
   }
