@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import Order from '../../models/Order.js'
 import Payment from '../../models/Payment.js'
 import PaymentEvent from '../../models/PaymentEvent.js'
+import OperationalEvent from '../../models/OperationalEvent.js'
 import WebhookEvent from '../../models/WebhookEvent.js'
 import { AppError } from '../../utils/AppError.js'
 
@@ -57,8 +58,13 @@ async function ordersFor(payments) {
   return new Map(orders.map((order) => [order._id.toString(), order]))
 }
 
+function toReconciliationActivity(event, workerEvent = false) {
+  const outcome = workerEvent ? 'WORKER_FAILURE' : event.type === 'ORDER_REPAIRED' ? 'AUTO_RECOVERED' : event.type === 'MANUAL_REVIEW_REQUIRED' ? 'MANUAL_REVIEW' : 'RECONCILIATION_FAILURE'
+  return { outcome, occurredAt: event.occurredAt }
+}
+
 export async function getDashboardSummary() {
-  const [totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, failedWebhookEvents, webhookEventsWithPayment, distinctWebhookPayments, totalAutoRecovered, totalManualReview, recentReconciliationEvents] = await Promise.all([
+  const [totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, failedWebhookEvents, webhookEventsWithPayment, distinctWebhookPayments, totalAutoRecovered, totalManualReview, totalReconciliationFailures, totalWorkerFailures, recentReconciliationEvents, recentWorkerEvents] = await Promise.all([
     Payment.countDocuments({}), Payment.countDocuments({ status: 'CAPTURED' }), Payment.countDocuments({ status: 'PENDING' }),
     Payment.countDocuments({ status: 'FAILED' }), Payment.countDocuments({ status: 'UNKNOWN' }),
     Order.countDocuments({ status: 'PAID' }), Order.countDocuments({ status: 'PAYMENT_REVIEW' }),
@@ -66,17 +72,21 @@ export async function getDashboardSummary() {
     WebhookEvent.distinct('payload.paymentId', { 'payload.paymentId': { $nin: [null, undefined] } }),
     PaymentEvent.countDocuments({ type: 'ORDER_REPAIRED' }),
     PaymentEvent.countDocuments({ type: 'MANUAL_REVIEW_REQUIRED' }),
-    PaymentEvent.find({ type: { $in: ['ORDER_REPAIRED', 'MANUAL_REVIEW_REQUIRED'] } }).sort({ occurredAt: -1 }).limit(1).lean(),
+    PaymentEvent.countDocuments({ type: 'PAYMENT_RECONCILIATION_FAILED' }),
+    OperationalEvent.countDocuments({ type: 'RECONCILIATION_WORKER_FAILED' }),
+    PaymentEvent.find({ type: { $in: ['ORDER_REPAIRED', 'MANUAL_REVIEW_REQUIRED', 'PAYMENT_RECONCILIATION_FAILED'] } }).sort({ occurredAt: -1 }).limit(1).lean(),
+    OperationalEvent.find({ type: 'RECONCILIATION_WORKER_FAILED' }).sort({ occurredAt: -1 }).limit(1).lean(),
   ])
   // Phase 12 suppresses same-event-id redeliveries without storing them, so the only duplicate signal
   // in the database is one gateway payment arriving under more than one event id.
   const duplicateWebhookEvents = Math.max(0, webhookEventsWithPayment - (distinctWebhookPayments?.length || 0))
-  const latest = recentReconciliationEvents[0]
-  const lastReconciliationActivity = latest ? {
-    outcome: latest.type === 'ORDER_REPAIRED' ? 'AUTO_RECOVERED' : 'MANUAL_REVIEW',
-    occurredAt: latest.occurredAt,
-  } : null
-  return { totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, duplicateWebhookEvents, failedWebhookEvents, totalAutoRecovered, totalManualReview, lastReconciliationActivity }
+  const latestEvent = recentReconciliationEvents[0]
+  const latestWorkerEvent = recentWorkerEvents[0]
+  const lastReconciliationActivity = !latestEvent && !latestWorkerEvent ? null
+    : !latestWorkerEvent || new Date(latestEvent.occurredAt) >= new Date(latestWorkerEvent.occurredAt) ? toReconciliationActivity(latestEvent)
+      : toReconciliationActivity(latestWorkerEvent, true)
+  const totalReconciliationFailureEvents = totalReconciliationFailures + totalWorkerFailures
+  return { totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, duplicateWebhookEvents, failedWebhookEvents, totalAutoRecovered, totalManualReview, totalReconciliationFailures: totalReconciliationFailureEvents, lastReconciliationActivity }
 }
 
 export async function getRecentPayments({ limit } = {}) {

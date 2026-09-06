@@ -59,5 +59,6 @@ describe('automated reconciliation runner', () => {
     const result = await runAutomatedReconciliation()
     expect(result.failures).toEqual([{ paymentId: broken._id.toString(), message: 'Reconciliation could not process this payment.' }])
     expect(result.repaired).toBe(1); expect(events.filter((event) => event.type === 'ORDER_REPAIRED')).toHaveLength(1)
+    expect(events.filter((event) => event.type === 'PAYMENT_RECONCILIATION_FAILED')).toHaveLength(1)
   })
 })

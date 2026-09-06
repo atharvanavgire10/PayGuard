@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals'
 import { createReconciliationWorker, DEFAULT_RECONCILIATION_INTERVAL_MS, getReconciliationIntervalMs, startDevelopmentReconciliationWorker } from '../src/services/payment/reconciliationWorker.js'
+import OperationalEvent from '../src/models/OperationalEvent.js'
 
 afterEach(() => jest.restoreAllMocks())
 
@@ -67,7 +68,26 @@ describe('reconciliation worker', () => {
     expect(successLock.release).toHaveBeenCalledTimes(1)
 
     const failureLock = availableLock()
-    await createReconciliationWorker({ run: jest.fn().mockRejectedValue(new Error('unavailable')), intervalMs: 1000, lock: failureLock }).runOnce()
+    const recordFailure = jest.fn().mockResolvedValue(undefined)
+    const worker = createReconciliationWorker({ run: jest.fn().mockRejectedValue(new Error('unavailable')), intervalMs: 1000, lock: failureLock, recordFailure })
+    await worker.runOnce()
     expect(failureLock.release).toHaveBeenCalledTimes(1)
+    expect(recordFailure).toHaveBeenCalledTimes(1)
+  })
+
+  it('continues running after a worker failure', async () => {
+    const run = jest.fn().mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce({ scanned: 0 })
+    const worker = createReconciliationWorker({ run, intervalMs: 1000, lock: availableLock(), recordFailure: jest.fn().mockResolvedValue(undefined) })
+    await expect(worker.runOnce()).resolves.toEqual({ skipped: false, failed: true })
+    await expect(worker.runOnce()).resolves.toEqual({ skipped: false })
+    expect(run).toHaveBeenCalledTimes(2)
+  })
+
+  it('records a safe structured event for a worker failure', async () => {
+    jest.spyOn(OperationalEvent, 'create').mockResolvedValue({})
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+    await createReconciliationWorker({ run: jest.fn().mockRejectedValue(new Error('RAZORPAY_KEY_SECRET=never-store')), intervalMs: 1000, lock: availableLock() }).runOnce()
+    expect(OperationalEvent.create).toHaveBeenCalledWith({ type: 'RECONCILIATION_WORKER_FAILED', status: 'failed' })
+    expect(JSON.stringify(OperationalEvent.create.mock.calls)).not.toContain('never-store')
   })
 })

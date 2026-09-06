@@ -18,6 +18,15 @@ async function markManualReview(payment, order, result) {
   if (created) result.eventsCreated += 1
 }
 
+async function recordReconciliationFailure(payment, result) {
+  try {
+    const created = await recordOnce({ paymentId: payment._id, orderId: payment.orderId, type: 'PAYMENT_RECONCILIATION_FAILED', status: 'failed' })
+    if (created) result.eventsCreated += 1
+  } catch {
+    // The original failure is still reported in the run result; audit write failure must not stop scanning.
+  }
+}
+
 export async function runAutomatedReconciliation() {
   const payments = await Payment.find({ status: { $in: ['CAPTURED', 'PENDING', 'UNKNOWN'] } }).sort({ updatedAt: 1 })
   const result = { scanned: payments.length, repaired: 0, manualReview: 0, unchanged: 0, eventsCreated: 0, failures: [] }
@@ -43,6 +52,7 @@ export async function runAutomatedReconciliation() {
       }
     } catch (error) {
       result.failures.push({ paymentId: payment._id.toString(), message: 'Reconciliation could not process this payment.' })
+      await recordReconciliationFailure(payment, result)
     }
   }
   return result
