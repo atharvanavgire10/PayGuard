@@ -38,7 +38,7 @@ function mockLists({ payments = [payment()], orders = [order()], failedWebhooks 
   jest.spyOn(WebhookEvent, 'find').mockReturnValue(query(failedWebhooks))
 }
 
-beforeEach(() => { process.env = { ...originalEnv, NODE_ENV: 'test', DASHBOARD_PENDING_MINUTES: '15' } })
+beforeEach(() => { process.env = { ...originalEnv, NODE_ENV: 'development', DASHBOARD_PENDING_MINUTES: '15' } })
 afterEach(() => { jest.restoreAllMocks(); process.env = originalEnv })
 
 describe('mismatch detection', () => {

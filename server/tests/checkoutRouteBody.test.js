@@ -20,3 +20,19 @@ test('POST /api/orders parses the browser JSON body and returns safe checkout da
   expect(response.body).toEqual(expect.objectContaining({ orderId: 'local-order-id', paymentId: 'local-payment-id', razorpayOrderId: 'order_gateway' }))
   expect(JSON.stringify(response.body)).not.toContain('SECRET')
 })
+
+test('POST /api/orders rejects invalid input before it reaches checkout logic', async () => {
+  const response = await request(app).post('/api/orders').send({ customer: { name: '', email: 'not-an-email' }, items: [] })
+  expect(response.status).toBe(400)
+  expect(response.body).toEqual({ error: { message: 'Invalid request payload.' } })
+  expect(createCheckoutOrder).not.toHaveBeenCalled()
+})
+
+test('unexpected checkout errors are safe and do not leak implementation details', async () => {
+  createCheckoutOrder.mockRejectedValue(new Error('RAZORPAY_KEY_SECRET=do-not-leak'))
+  const payload = { customer: { name: 'PayGuard Test Customer', email: 'test@example.com' }, items: [{ sku: 'payguard-demo-order', quantity: 1 }] }
+  const response = await request(app).post('/api/orders').send(payload)
+  expect(response.status).toBe(500)
+  expect(response.body).toEqual({ error: { message: 'An unexpected server error occurred.' } })
+  expect(JSON.stringify(response.body)).not.toContain('do-not-leak')
+})
