@@ -10,7 +10,7 @@ import { getDashboardAttention, getDashboardPayments, getDashboardSummary } from
 
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 
-const summary = { totalPayments: 4, capturedPayments: 1, pendingPayments: 1, failedPayments: 1, unknownPayments: 1, paidOrders: 1, ordersRequiringAttention: 1, duplicateWebhookEvents: 2, failedWebhookEvents: 1 }
+const summary = { totalPayments: 4, capturedPayments: 1, pendingPayments: 1, failedPayments: 1, unknownPayments: 1, paidOrders: 1, ordersRequiringAttention: 1, duplicateWebhookEvents: 2, failedWebhookEvents: 1, totalAutoRecovered: 2, totalManualReview: 1, lastReconciliationActivity: { outcome: 'AUTO_RECOVERED', occurredAt: '2026-08-24T10:00:00.000Z' } }
 const paymentRow = { paymentId: '507f1f77bcf86cd799439011', orderNumber: 'PG-100', razorpayPaymentId: 'pay_test', amount: 129900, currency: 'INR', paymentStatus: 'CAPTURED', orderStatus: 'PAID', createdAt: '2026-08-24T10:00:00.000Z', updatedAt: '2026-08-24T10:01:00.000Z' }
 
 function mockApi({ summaryData = summary, payments = [paymentRow], attention = [], thresholdMinutes = 15 } = {}) {
@@ -42,10 +42,20 @@ test('shows a loading state before data arrives', async () => {
 })
 
 test('shows empty states when there is no activity and nothing needs attention', async () => {
-  mockApi({ payments: [], attention: [] })
+  mockApi({ summaryData: { ...summary, totalAutoRecovered: 0, totalManualReview: 0, lastReconciliationActivity: null }, payments: [], attention: [] })
   render(<DashboardPage />)
   expect(await screen.findByText(/No payments have been recorded yet/)).toBeInTheDocument()
   expect(screen.getByText(/Nothing needs attention/)).toBeInTheDocument()
+  expect(screen.getByText(/No reconciliation activity has been recorded yet/)).toBeInTheDocument()
+})
+
+test('shows reconciliation totals and the most recent authoritative activity', async () => {
+  mockApi()
+  render(<DashboardPage />)
+  const health = await screen.findByLabelText('Reconciliation health')
+  expect(within(health).getByText('Auto-recovered')).toBeInTheDocument()
+  expect(within(health).getByText('Manual review')).toBeInTheDocument()
+  expect(within(health).getByText(/Last activity:/).parentElement).toHaveTextContent('AUTO-RECOVERED')
 })
 
 test('lists attention records with their database-derived reasons', async () => {

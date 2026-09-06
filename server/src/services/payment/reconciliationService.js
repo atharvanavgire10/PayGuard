@@ -58,17 +58,25 @@ async function ordersFor(payments) {
 }
 
 export async function getDashboardSummary() {
-  const [totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, failedWebhookEvents, webhookEventsWithPayment, distinctWebhookPayments] = await Promise.all([
+  const [totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, failedWebhookEvents, webhookEventsWithPayment, distinctWebhookPayments, totalAutoRecovered, totalManualReview, recentReconciliationEvents] = await Promise.all([
     Payment.countDocuments({}), Payment.countDocuments({ status: 'CAPTURED' }), Payment.countDocuments({ status: 'PENDING' }),
     Payment.countDocuments({ status: 'FAILED' }), Payment.countDocuments({ status: 'UNKNOWN' }),
     Order.countDocuments({ status: 'PAID' }), Order.countDocuments({ status: 'PAYMENT_REVIEW' }),
     WebhookEvent.countDocuments({ status: 'FAILED' }), WebhookEvent.countDocuments({ 'payload.paymentId': { $nin: [null, undefined] } }),
     WebhookEvent.distinct('payload.paymentId', { 'payload.paymentId': { $nin: [null, undefined] } }),
+    PaymentEvent.countDocuments({ type: 'ORDER_REPAIRED' }),
+    PaymentEvent.countDocuments({ type: 'MANUAL_REVIEW_REQUIRED' }),
+    PaymentEvent.find({ type: { $in: ['ORDER_REPAIRED', 'MANUAL_REVIEW_REQUIRED'] } }).sort({ occurredAt: -1 }).limit(1).lean(),
   ])
   // Phase 12 suppresses same-event-id redeliveries without storing them, so the only duplicate signal
   // in the database is one gateway payment arriving under more than one event id.
   const duplicateWebhookEvents = Math.max(0, webhookEventsWithPayment - (distinctWebhookPayments?.length || 0))
-  return { totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, duplicateWebhookEvents, failedWebhookEvents }
+  const latest = recentReconciliationEvents[0]
+  const lastReconciliationActivity = latest ? {
+    outcome: latest.type === 'ORDER_REPAIRED' ? 'AUTO_RECOVERED' : 'MANUAL_REVIEW',
+    occurredAt: latest.occurredAt,
+  } : null
+  return { totalPayments, capturedPayments, pendingPayments, failedPayments, unknownPayments, paidOrders, ordersRequiringAttention, duplicateWebhookEvents, failedWebhookEvents, totalAutoRecovered, totalManualReview, lastReconciliationActivity }
 }
 
 export async function getRecentPayments({ limit } = {}) {

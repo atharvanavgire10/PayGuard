@@ -23,11 +23,13 @@ const payment = (overrides = {}) => ({ _id: paymentId, orderId, razorpayOrderId:
 const order = (overrides = {}) => ({ _id: orderId, orderNumber: 'PG-100', status: 'PAID', paymentStatus: 'CAPTURED', amount: 129900, currency: 'INR', ...overrides })
 
 function mockCounts(counts = {}) {
-  const values = { payments: 4, captured: 1, pending: 1, failed: 1, unknown: 1, paid: 1, review: 1, webhookFailed: 1, webhookWithPayment: 3, ...counts }
+  const values = { payments: 4, captured: 1, pending: 1, failed: 1, unknown: 1, paid: 1, review: 1, webhookFailed: 1, webhookWithPayment: 3, autoRecovered: 2, manualReview: 1, ...counts }
   jest.spyOn(Payment, 'countDocuments').mockImplementation(async (filter = {}) => filter.status ? { CAPTURED: values.captured, PENDING: values.pending, FAILED: values.failed, UNKNOWN: values.unknown }[filter.status] : values.payments)
   jest.spyOn(Order, 'countDocuments').mockImplementation(async (filter = {}) => filter.status === 'PAID' ? values.paid : values.review)
   jest.spyOn(WebhookEvent, 'countDocuments').mockImplementation(async (filter = {}) => filter.status === 'FAILED' ? values.webhookFailed : values.webhookWithPayment)
   jest.spyOn(WebhookEvent, 'distinct').mockResolvedValue(values.distinct || ['pay_a', 'pay_b'])
+  jest.spyOn(PaymentEvent, 'countDocuments').mockImplementation(async (filter = {}) => filter.type === 'ORDER_REPAIRED' ? values.autoRecovered : values.manualReview)
+  jest.spyOn(PaymentEvent, 'find').mockReturnValue(query(values.recentActivity || []))
 }
 
 function mockLists({ payments = [payment()], orders = [order()], failedWebhooks = [] } = {}) {
@@ -78,10 +80,10 @@ describe('stale pending detection', () => {
 
 describe('GET /api/dashboard/summary', () => {
   it('reports counts derived from stored records', async () => {
-    mockCounts()
+    mockCounts({ recentActivity: [{ type: 'ORDER_REPAIRED', occurredAt: new Date('2026-08-24T10:00:00.000Z') }] })
     const response = await request(app).get('/api/dashboard/summary')
     expect(response.status).toBe(200)
-    expect(response.body).toEqual(expect.objectContaining({ totalPayments: 4, capturedPayments: 1, pendingPayments: 1, failedPayments: 1, unknownPayments: 1, paidOrders: 1, ordersRequiringAttention: 1, failedWebhookEvents: 1 }))
+    expect(response.body).toEqual(expect.objectContaining({ totalPayments: 4, capturedPayments: 1, pendingPayments: 1, failedPayments: 1, unknownPayments: 1, paidOrders: 1, ordersRequiringAttention: 1, failedWebhookEvents: 1, totalAutoRecovered: 2, totalManualReview: 1, lastReconciliationActivity: { outcome: 'AUTO_RECOVERED', occurredAt: '2026-08-24T10:00:00.000Z' } }))
   })
 
   it('derives duplicate webhook events from repeated gateway payment ids', async () => {
@@ -91,10 +93,10 @@ describe('GET /api/dashboard/summary', () => {
   })
 
   it('returns zeroes rather than failing when there is no data', async () => {
-    mockCounts({ payments: 0, captured: 0, pending: 0, failed: 0, unknown: 0, paid: 0, review: 0, webhookFailed: 0, webhookWithPayment: 0, distinct: [] })
+    mockCounts({ payments: 0, captured: 0, pending: 0, failed: 0, unknown: 0, paid: 0, review: 0, webhookFailed: 0, webhookWithPayment: 0, autoRecovered: 0, manualReview: 0, distinct: [] })
     const response = await request(app).get('/api/dashboard/summary')
     expect(response.status).toBe(200)
-    expect(response.body).toEqual({ totalPayments: 0, capturedPayments: 0, pendingPayments: 0, failedPayments: 0, unknownPayments: 0, paidOrders: 0, ordersRequiringAttention: 0, duplicateWebhookEvents: 0, failedWebhookEvents: 0 })
+    expect(response.body).toEqual({ totalPayments: 0, capturedPayments: 0, pendingPayments: 0, failedPayments: 0, unknownPayments: 0, paidOrders: 0, ordersRequiringAttention: 0, duplicateWebhookEvents: 0, failedWebhookEvents: 0, totalAutoRecovered: 0, totalManualReview: 0, lastReconciliationActivity: null })
   })
 })
 
