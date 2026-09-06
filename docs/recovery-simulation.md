@@ -1,4 +1,4 @@
-# Payment recovery simulation (Phase 13)
+# Payment recovery simulation
 
 This simulation demonstrates the reliability problem PayGuard exists to solve: a payment succeeds at the gateway, the browser never receives its confirmation, and the payment is recovered only by a verified webhook — without creating a duplicate order or payment.
 

@@ -1,4 +1,4 @@
-# Razorpay webhooks (Phase 12)
+# Razorpay webhooks
 
 PayGuard receives Razorpay Test Mode callbacks at `POST /api/webhooks/razorpay`. The route verifies `X-Razorpay-Signature` against the exact raw request bytes using `RAZORPAY_WEBHOOK_SECRET`.
 
@@ -8,7 +8,7 @@ Supported events are `payment.captured` and `payment.failed`. Each `X-Razorpay-E
 
 1. Set `RAZORPAY_WEBHOOK_SECRET` in `server/.env` to the secret generated for the Razorpay Test Mode webhook.
 2. Run the API locally on port 5000.
-3. Expose it, for example: `ngrok http 5000`.
+3. Expose it over HTTPS with a tunnel. A Cloudflare Quick Tunnel needs no account: `cloudflared tunnel --url http://localhost:5000`. Any equivalent tunnel works; Razorpay requires HTTPS.
 4. In Razorpay Test Mode Dashboard, create a webhook URL using `https://<tunnel-host>/api/webhooks/razorpay` and enable the supported payment events.
 5. Complete a Test Mode checkout and verify the delivery plus PayGuard's payment/order status endpoints.
 

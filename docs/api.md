@@ -1,6 +1,24 @@
-# PayGuard status API (Phase 9.5)
+# PayGuard status API
 
 These read-only endpoints expose the payment and order state stored in PayGuard's database. Authentication and authorization are deliberately not included in this prototype and must be added before production use.
+
+## `GET /api/health`
+
+Liveness. Always `200` while the process is running.
+
+```json
+{ "status": "ok", "service": "payguard-api", "database": "connected" }
+```
+
+## `GET /api/health/ready`
+
+Readiness. `200` when the database is reachable, `503` otherwise, so an orchestrator withholds traffic during startup or a database outage.
+
+```json
+{ "status": "ready", "database": "connected" }
+```
+
+Neither response exposes configuration values, secrets, versions, dependency names, or error details.
 
 ## `GET /api/payments/:paymentId/status`
 

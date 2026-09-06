@@ -18,12 +18,13 @@ export function getReconciliationIntervalMs(value = process.env.RECONCILIATION_I
 export function createReconciliationWorker({ run = runAutomatedReconciliation, intervalMs = getReconciliationIntervalMs(), setIntervalFn = setInterval, clearIntervalFn = clearInterval, ownerId = randomUUID(), lock, recordFailure = recordReconciliationWorkerFailure } = {}) {
   let timer = null
   let running = false
+  let inFlight = null
   const distributedLock = lock || {
     acquire: () => acquireReconciliationLock({ ownerId }),
     release: () => releaseReconciliationLock({ ownerId }),
   }
 
-  async function runOnce() {
+  async function execute() {
     if (running) return { skipped: true }
     running = true
     let acquired = false
@@ -44,6 +45,13 @@ export function createReconciliationWorker({ run = runAutomatedReconciliation, i
     }
   }
 
+  // Tracked so shutdown can await an execution that is already holding the distributed lock. The
+  // returned value and the in-process `running` guard are unchanged from the scheduled behaviour.
+  function runOnce() {
+    inFlight = execute().finally(() => { inFlight = null })
+    return inFlight
+  }
+
   return {
     start() {
       if (timer || intervalMs === null) return false
@@ -55,6 +63,13 @@ export function createReconciliationWorker({ run = runAutomatedReconciliation, i
       clearIntervalFn(timer)
       timer = null
       return true
+    },
+    // Stops the schedule and waits for an in-flight execution to finish, which lets its `finally`
+    // release the distributed lock instead of abandoning it for the TTL monitor to reclaim.
+    async shutdown() {
+      const stopped = this.stop()
+      try { await inFlight } catch { /* execute() already records and logs its own failures */ }
+      return stopped
     },
     runOnce,
     isRunning: () => running,

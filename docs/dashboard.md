@@ -1,4 +1,4 @@
-# Reliability dashboard (Phase 14)
+# Reliability dashboard
 
 A merchant-facing reconciliation view that **reads** authoritative PayGuard state and surfaces payments that may need investigation. It is observability only: it performs no database writes, calls no Razorpay API, and never decides a payment outcome itself. Every condition it displays is derived from stored `Payment`, `Order`, and `WebhookEvent` records.
 
@@ -15,11 +15,11 @@ All are `GET`, all read-only, all behind the development guard.
 
 The UI lives at **`/dashboard`**.
 
-## Phase 15 automated repair (development only)
+## Automated repair (development only)
 
 `POST /api/reconciliation/run` runs the narrowly scoped reconciliation engine in development. It repairs only a stored `CAPTURED` payment whose associated order is not `PAID`, using the normal order state-transition service. `PENDING` and `UNKNOWN` payments are never promoted: they receive a deduplicated `MANUAL_REVIEW_REQUIRED` audit event instead. The runner records `RECONCILIATION_STARTED` and `ORDER_REPAIRED` only for an actual safe repair.
 
-## Phase 17 scheduled reconciliation (development only)
+## Scheduled reconciliation (development only)
 
 The server starts a lightweight in-process worker in development that calls the same automated reconciliation service every five minutes. Set `RECONCILIATION_INTERVAL_MS` to a whole number of milliseconds (minimum `1000`) to change the interval; set it to `0`, or an invalid value, to disable the worker. The worker never overlaps executions and stops when the server receives `SIGINT` or `SIGTERM`. It is intentionally isolated so a production job queue can replace it later without changing repair rules.
 
@@ -38,7 +38,7 @@ Two deliberate design decisions are worth knowing, because both exist to avoid r
 
 **Mismatches are only judged once a payment settles.** `checkoutService` creates an order with `paymentStatus: CREATED` alongside a payment with `status: PENDING`, so a healthy brand-new order legitimately has those two fields disagreeing. Status drift is therefore only flagged when the payment has reached `CAPTURED`, `FAILED`, or `REFUNDED`. A naive equality check would have flagged every new order.
 
-**Duplicate webhook events are derived, not stored.** Phase 12 suppresses a redelivered event id at the unique index and returns without persisting a second record, so there is no row to count. The dashboard instead reports how many stored webhook events share a gateway payment id: `count(events with a payload paymentId) − distinct(payload paymentId)`. That detects one gateway payment arriving under more than one event id, which is the duplicate case that matters. Same-event-id redeliveries are invisible here by design — the Phase 13 simulation is what proves those are handled.
+**Duplicate webhook events are derived, not stored.** The webhook service suppresses a redelivered event id at the unique index and returns without persisting a second record, so there is no row to count. The dashboard instead reports how many stored webhook events share a gateway payment id: `count(events with a payload paymentId) − distinct(payload paymentId)`. That detects one gateway payment arriving under more than one event id, which is the duplicate case that matters. Same-event-id redeliveries are invisible here by design — the recovery simulation is what proves those are handled.
 
 ## What is never exposed
 
@@ -57,7 +57,7 @@ cd client && npm run dev
 
 **Healthy state.** Complete a normal Test Mode checkout through `/checkout`. The payment should appear in the recent payments table as `CAPTURED` / `PAID`, and the attention queue should stay empty — a successful payment is not a problem to investigate.
 
-**Recovery state.** Run the Phase 13 simulation and watch the dashboard across it:
+**Recovery state.** Run the recovery simulation and watch the dashboard across it:
 
 ```bash
 cd server && npm run recovery:simulate
@@ -77,7 +77,7 @@ db.orders.updateOne({ orderNumber: '<order number>' }, { $set: { status: 'PENDIN
 
 The entry should render with a red **State mismatch** badge and the reason `Captured but order not paid`. Set the order back to `PAID` afterwards.
 
-**Failed webhook state.** Send a signed webhook for a Razorpay order id that has no matching local payment. Phase 12 stores it as `FAILED` with `Matching payment was not found.`, and it should surface as a `WEBHOOK` entry in the queue.
+**Failed webhook state.** Send a signed webhook for a Razorpay order id that has no matching local payment. The webhook service stores it as `FAILED` with `Matching payment was not found.`, and it should surface as a `WEBHOOK` entry in the queue.
 
 **Error state.** Stop the API server and reload `/dashboard`. The page should show a safe error panel, not a stack trace or a blank screen.
 
