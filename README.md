@@ -12,6 +12,8 @@ That gap is where ecommerce loses money and trust. The customer sees no order an
 
 The gateway is the only authority on whether money moved. PayGuard's job is to keep asking it, and to converge on the truth without ever guessing.
 
+Live Demo: https://pay-guard-sooty.vercel.app/
+
 ## Core guarantees
 
 **Never invent a success.** A payment becomes `CAPTURED` only from a verified gateway signature — an HMAC-verified webhook or an HMAC-verified client callback. A payment that is merely stuck goes to manual review, never to paid.
